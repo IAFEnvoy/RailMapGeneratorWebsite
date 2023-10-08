@@ -1,7 +1,7 @@
 import { MultiDirectedGraph } from 'graphology';
 import { EdgeAttributes, GraphAttributes, NodeAttributes, Theme } from '../constants/constants';
 import { ExternalStationAttributes, StationType } from '../constants/stations';
-import { LinePathType, LineStyleType } from '../constants/lines';
+import { LinePathType, LineStyleType, LineStylesWithColor } from '../constants/lines';
 import stations from '../components/svgs/stations/stations';
 import { linePaths, lineStyles } from '../components/svgs/lines/lines';
 import { SingleColorAttributes } from '../components/svgs/lines/styles/single-color';
@@ -105,15 +105,6 @@ export const changeLinePathType = (
     graph.mergeEdgeAttributes(selectedFirst, { type: newLinePathType, [newLinePathType]: newAttrs });
 };
 
-const LineStylesWithColor = [
-    LineStyleType.SingleColor,
-    LineStyleType.BjsubwaySingleColor,
-    LineStyleType.BjsubwayTram,
-    LineStyleType.BjsubwayDotted,
-    LineStyleType.MTRRaceDays,
-    LineStyleType.MTRLightRail,
-];
-
 /**
  * Change a line's style type.
  * @param graph Graph.
@@ -133,8 +124,28 @@ export const changeLineStyleType = (
     const newAttrs = structuredClone(lineStyles[newLineStyleType].defaultAttrs);
     if (LineStylesWithColor.includes(currentLineStyleType) && LineStylesWithColor.includes(newLineStyleType))
         (newAttrs as AttributesWithColor).color = (oldAttrs as AttributesWithColor).color;
-    else if (newLineStyleType === LineStyleType.SingleColor && theme) (newAttrs as SingleColorAttributes).color = theme;
+    else if (LineStylesWithColor.includes(newLineStyleType) && theme) (newAttrs as AttributesWithColor).color = theme;
     graph.mergeEdgeAttributes(selectedFirst, { style: newLineStyleType, [newLineStyleType]: newAttrs });
     if (newLineStyleType === LineStyleType.River) graph.setEdgeAttribute(selectedFirst, 'zIndex', -5);
     else graph.setEdgeAttribute(selectedFirst, 'zIndex', 0);
 };
+
+export const changeLinesColorInBatch = (
+    graph: MultiDirectedGraph<NodeAttributes, EdgeAttributes, GraphAttributes>,
+    currentLineColor: Theme,
+    newLineColor: Theme
+) =>
+    graph
+        .filterEdges(edge => LineStylesWithColor.includes(graph.getEdgeAttribute(edge, 'style')))
+        .forEach(edge => {
+            const attr = graph.getEdgeAttributes(edge);
+            const color = (attr[attr.style] as AttributesWithColor).color;
+            if (
+                color[0] == currentLineColor[0] &&
+                color[1] == currentLineColor[1] &&
+                color[2] == currentLineColor[2] &&
+                color[3] == currentLineColor[3]
+            ) {
+                graph.mergeEdgeAttributes(edge, { [attr.style]: { color: newLineColor } });
+            }
+        });

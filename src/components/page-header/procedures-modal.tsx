@@ -29,17 +29,22 @@ import { RmgFields, RmgFieldsField } from '@railmapgen/rmg-components';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { MdOpenInNew } from 'react-icons/md';
-import { LineStyleType } from '../../constants/lines';
+import { LineStyleType, LineStylesWithColor } from '../../constants/lines';
 import { StationType } from '../../constants/stations';
 import { useRootDispatch, useRootSelector } from '../../redux';
 import { setUnlockSimplePath } from '../../redux/app/app-slice';
 import { saveGraph } from '../../redux/param/param-slice';
 import { openPaletteAppClip, setRefreshEdges, setRefreshNodes } from '../../redux/runtime/runtime-slice';
-import { changeLineStyleTypeInBatch, changeStationsTypeInBatch } from '../../util/change-types';
+import {
+    changeLineStyleTypeInBatch,
+    changeLinesColorInBatch,
+    changeStationsTypeInBatch,
+} from '../../util/change-types';
 import { shuffle } from '../../util/helpers';
 import ThemeButton from '../panels/theme-button';
 import { lineStyles } from '../svgs/lines/lines';
 import stations from '../svgs/stations/stations';
+import { AttributesWithColor } from '../panels/details/color-field';
 
 export const TranslateNodesModal = (props: { isOpen: boolean; onClose: () => void }) => {
     const { isOpen, onClose } = props;
@@ -311,6 +316,86 @@ export const ChangeLineStyleTypeModal = (props: { isOpen: boolean; onClose: () =
     );
 };
 
+export const ChangeLinesColorInBatchModal = (props: { isOpen: boolean; onClose: () => void }) => {
+    const { isOpen, onClose } = props;
+    const dispatch = useRootDispatch();
+    const { theme: runtimeOldTheme, paletteAppClip: oldOriginOutput } = useRootSelector(state => state.runtime);
+    const { theme: runtimeNewTheme, paletteAppClip: newOriginOutput } = useRootSelector(state => state.runtime);
+    const { t } = useTranslation();
+    const graph = React.useRef(window.graph);
+
+    const [oldTheme, setOldTheme] = React.useState(runtimeOldTheme);
+    const [newTheme, setNewTheme] = React.useState(runtimeNewTheme);
+
+    const [isOldThemeRequested, setIsOldThemeRequested] = React.useState(false);
+    const [isNewThemeRequested, setIsNewThemeRequested] = React.useState(false);
+
+    const oldOutput = oldOriginOutput.output;
+    const newOutput = newOriginOutput.output;
+
+    React.useEffect(() => {
+        if (isOldThemeRequested && oldOutput) {
+            setOldTheme(oldOutput);
+            setIsOldThemeRequested(false);
+        }
+    }, [oldOutput?.toString()]);
+    React.useEffect(() => {
+        if (isNewThemeRequested && newOutput) {
+            setNewTheme(newOutput);
+            setIsNewThemeRequested(false);
+        }
+    }, [newOutput?.toString()]);
+
+    const handleChange = () => {
+        changeLinesColorInBatch(graph.current, oldTheme, newTheme);
+        dispatch(setRefreshEdges());
+        dispatch(saveGraph(graph.current.export()));
+        onClose();
+    };
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} size="xl" scrollBehavior="inside" trapFocus={false}>
+            <ModalOverlay />
+            <ModalContent>
+                <ModalHeader>{t('header.settings.procedures.changeLinesColor.title')}</ModalHeader>
+                <ModalCloseButton />
+
+                <ModalBody>
+                    {t('header.settings.procedures.changeLinesColor.changeFrom')}
+                    <br />
+                    <ThemeButton
+                        theme={oldTheme}
+                        onClick={() => {
+                            setIsOldThemeRequested(true);
+                            dispatch(openPaletteAppClip(oldTheme));
+                        }}
+                    />
+                    <br />
+                    <br />
+                    {t('header.settings.procedures.changeLinesColor.changeTo')}
+                    <br />
+                    <ThemeButton
+                        theme={newTheme}
+                        onClick={() => {
+                            setIsNewThemeRequested(true);
+                            dispatch(openPaletteAppClip(newTheme));
+                        }}
+                    />
+                </ModalBody>
+
+                <ModalFooter>
+                    <Button colorScheme="blue" variant="outline" mr="1" onClick={onClose}>
+                        {t('cancel')}
+                    </Button>
+                    <Button colorScheme="red" onClick={handleChange}>
+                        {t('apply')}
+                    </Button>
+                </ModalFooter>
+            </ModalContent>
+        </Modal>
+    );
+};
+
 export const RemoveLinesWithSingleColorModal = (props: { isOpen: boolean; onClose: () => void }) => {
     const { isOpen, onClose } = props;
     const dispatch = useRootDispatch();
@@ -335,8 +420,8 @@ export const RemoveLinesWithSingleColorModal = (props: { isOpen: boolean; onClos
         graph.current
             .filterEdges(
                 (edge, attr, source, target, sourceAttr, targetAttr, undirected) =>
-                    attr.style === LineStyleType.SingleColor &&
-                    JSON.stringify(attr[LineStyleType.SingleColor]!.color) === JSON.stringify(theme)
+                    LineStylesWithColor.includes(attr.style) &&
+                    JSON.stringify((attr[attr.style] as AttributesWithColor)!.color) === JSON.stringify(theme)
             )
             .forEach(edge => graph.current.dropEdge(edge));
         dispatch(setRefreshEdges());
